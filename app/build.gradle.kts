@@ -38,5 +38,6 @@ dependencies {
     implementation(libs.google.ar.core)
     implementation("androidx.core:core-ktx:1.6.0")
     implementation(libs.androidx.appcompat)
+    implementation(libs.material)
     testImplementation(libs.junit)
 }

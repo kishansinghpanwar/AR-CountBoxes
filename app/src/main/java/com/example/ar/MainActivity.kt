@@ -6,16 +6,17 @@ import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.view.WindowManager
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import com.google.ar.core.Camera
 import com.google.ar.core.Config
 import com.google.ar.core.Frame
+import com.google.ar.core.Plane
 import com.google.ar.core.Session
-import com.google.ar.core.exceptions.CameraNotAvailableException
+import com.google.ar.core.TrackingState
 import com.google.ar.core.exceptions.UnavailableApkTooOldException
 import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException
-import com.google.ar.core.exceptions.UnavailableException
 import com.google.ar.core.exceptions.UnavailableSdkTooOldException
+import java.nio.FloatBuffer
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 
@@ -23,7 +24,6 @@ import javax.microedition.khronos.opengles.GL10
 class MainActivity : AppCompatActivity() , GLSurfaceView.Renderer{
     private var arSession: Session? = null
     private lateinit var myGLSurfaceView: GLSurfaceView
-    private lateinit var myGLRenderer: MinimalRenderer
     private var displayRotationHelper: DisplayRotationHelper? = null
 
 
@@ -51,6 +51,8 @@ class MainActivity : AppCompatActivity() , GLSurfaceView.Renderer{
         myGLSurfaceView.setEGLConfigChooser(8, 8, 8, 8, 16, 0); // Alpha used for plane blending.
         myGLSurfaceView.setRenderer(this);
         myGLSurfaceView.renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY;
+        myGLSurfaceView.setWillNotDraw(false);
+
     }
 
 
@@ -81,6 +83,12 @@ class MainActivity : AppCompatActivity() , GLSurfaceView.Renderer{
                 return
             }
         }
+
+        val config: Config? = arSession?.getConfig()
+        config?.setDepthMode(Config.DepthMode.RAW_DEPTH_ONLY)
+        config?.setFocusMode(Config.FocusMode.AUTO)
+        arSession?.configure(config)
+
         // Note that order matters - see the note in onPause(), the reverse applies here.
         arSession?.resume()
         myGLSurfaceView.onResume()
@@ -113,10 +121,15 @@ class MainActivity : AppCompatActivity() , GLSurfaceView.Renderer{
         }
     }
 
+    private val depthRenderer = DepthRenderer()
+    private val boxRenderer = BoxRenderer()
+
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         GLES20.glClearColor(0.1f, 0.1f, 0.1f, 1.0f)
         // Create the texture and pass it to ARCore session to be filled during update().
         backgroundRenderer.createOnGlThread( /*context=*/this)
+        depthRenderer.createOnGlThread( /*context=*/this)
+        boxRenderer.createOnGlThread( /*context=*/this)
         arSession?.setCameraTextureName(backgroundRenderer.textureId)
         // The image format can be either IMAGE_FORMAT_RGBA or IMAGE_FORMAT_I8.
         // Set keepAspectRatio to false so that the output image covers the whole viewport.
@@ -127,42 +140,61 @@ class MainActivity : AppCompatActivity() , GLSurfaceView.Renderer{
         displayRotationHelper?.onSurfaceChanged(width, height)
         GLES20.glViewport(0, 0, width, height)
     }
-
     override fun onDrawFrame(gl: GL10?) {
         // Clear screen to notify driver it should not load any pixels from previous frame.
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
+
         if (arSession == null) {
             return
         }
         // Notify ARCore session that the view size changed so that the perspective matrix and
         // the video background can be properly adjusted.
-        displayRotationHelper?.updateSessionIfNeeded(arSession!!)
+        displayRotationHelper!!.updateSessionIfNeeded(arSession!!)
+
         try {
+            arSession?.setCameraTextureName(backgroundRenderer.textureId)
+
+            // Obtain the current frame from ARSession. When the configuration is set to
+            // UpdateMode.BLOCKING (it is by default), this will throttle the rendering to the
+            // camera framerate.
             val frame: Frame = arSession!!.update()
-            // If there is a frame being requested previously, acquire the pixels and process it.
-           /* if (frameBufferIndex >= 0) {
-                val imageBuffer: CameraImageBuffer = textureReader.acquireFrame(frameBufferIndex)
-                // Detect the edges from the captured grayscale image.
-                if (EdgeDetector.detect(edgeImage, imageBuffer)) {
-                    // Set the edge image to renderer as overlay.
-                    backgroundRenderer.setOverlayImage(edgeImage)
-                }
-                // You should always release frame buffer after using. Otherwise the next call to
-                // submitFrame() may fail.
-                //textureReader.releaseFrame(frameBufferIndex)
-            }*/
-            // Submit request for the texture from the current frame.
-           /* frameBufferIndex =
-                textureReader.submitFrame(
-                    backgroundRenderer.textureId, TEXTURE_WIDTH, TEXTURE_HEIGHT
-                )*/
-            // Draw background video.
+            val camera: Camera = frame.camera
+
+            // If frame is ready, render camera preview image to the GL surface.
             backgroundRenderer.draw(frame)
+
+            // Retrieve the depth data for this frame.
+            val points: FloatBuffer =
+                DepthData.create(frame, arSession?.createAnchor(camera.getPose()))
+                    ?: return
+
+
+            // If not tracking, show tracking failure reason instead.
+            if (camera.getTrackingState() === TrackingState.PAUSED) {
+               /* messageSnackbarHelper.showMessage(
+                    this, TrackingStateHelper.getTrackingFailureReasonString(camera)
+                )*/
+                return
+            }
+
+            // Filters the depth data.
+            DepthData.filterUsingPlanes(points, arSession?.getAllTrackables(Plane::class.java))
+
+            // Visualize depth points.
+            depthRenderer.update(points)
+            depthRenderer.draw(camera)
+
+            // Draw boxes around clusters of points.
+            val clusteringHelper: PointClusteringHelper = PointClusteringHelper(points)
+            val clusters: List<AABB> = clusteringHelper.findClusters()
+            for (aabb in clusters) {
+                boxRenderer.draw(aabb, camera)
+            }
         } catch (t: Throwable) {
             // Avoid crashing the application due to unhandled exceptions.
             Log.e("ERROR", "Exception on the OpenGL thread", t)
         }
     }
-
-
 }
+
+

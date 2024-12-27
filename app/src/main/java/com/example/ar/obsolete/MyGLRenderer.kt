@@ -1,9 +1,8 @@
-package com.example.ar
+package com.example.ar.obsolete
 
 import android.content.Context
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
-import android.util.Log
 import com.google.ar.core.Frame
 import com.google.ar.core.Session
 import com.google.ar.core.exceptions.CameraNotAvailableException
@@ -15,6 +14,8 @@ import java.nio.FloatBuffer
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 import android.opengl.GLES11Ext
+import com.example.ar.DisplayRotationHelper
+import com.example.ar.R
 
 class MyGLRenderer(private val context: Context, private val arSession: Session) : GLSurfaceView.Renderer {
     private val vertexCoords = floatArrayOf(

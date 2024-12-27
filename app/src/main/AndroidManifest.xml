@@ -32,7 +32,7 @@
         android:theme="@style/Theme.AR"
         tools:targetApi="31">
         <activity
-            android:name=".MainActivity"
+            android:name=".raw.rawdepth.RawDepthCodelabActivity"
             android:exported="true"
             android:theme="@style/Theme.AR">
             <intent-filter>
@@ -43,6 +43,11 @@
         </activity>
         <meta-data android:name="com.google.ar.core" android:value="required" />
 
+
+        <!-- Enable use of unsigned ARCore APKs and disable Play Store submission. -->
+        <meta-data
+            android:name="com.google.ar.core.disable_security_check"
+            android:value="true" />
     </application>
 
 </manifest>
