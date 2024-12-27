@@ -12,6 +12,7 @@ arCore = "1.47.0"
 appcompat = "1.7.0"
 sceneformUx = "1.17.1"
 appcompatVersion = "1.7.0"
+material = "1.12.0"
 
 [libraries]
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -30,6 +31,7 @@ androidx-material3 = { group = "androidx.compose.material3", name = "material3" 
 google-ar-core = { group = "com.google.ar", name = "core", version.ref = "arCore" }
 sceneform-ux = { group = "com.google.ar.sceneform.ux", name = "sceneform-ux", version.ref = "sceneformUx" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompatVersion" }
+material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
